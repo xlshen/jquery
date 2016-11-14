@@ -1704,6 +1704,8 @@ function addCombinator( matcher, combinator, base ) {
 					}
 				}
 			} else {
+				// 如果是不紧密的位置关系，一直匹配到true为止。如祖宗关系的话，就一直找父亲节点直到有一个祖先节点符合规则为止
+				// 直接递归调用
 				while ( (elem = elem[ dir ]) ) {
 					if ( elem.nodeType === 1 || checkNonElements ) {
 						outerCache = elem[ expando ] || (elem[ expando ] = {});
@@ -1747,7 +1749,23 @@ function elementMatcher( matchers ) {
 		} :
 		matchers[0];
 }
-
+/*
+	总体查询汇总：
+	1. 'div > span.last + .xlshen[type="text"]'分词
+	2. 找出seed =>  'div > span.last + [type="text"]'
+	3. 编译成3组:
+		① div >
+		② span.last +
+		③ [type="text"]
+	4. 从内往外执行编译函数，传入seed数组，循环往外匹配执行
+		① [type="text"]
+		② addCombinator
+		③ span.last +
+		④ addCombinator
+		⑤ div >
+		⑥ return true;
+	5. 返回seed匹配结果数组
+*/
 function multipleContexts( selector, contexts, results ) {
 	var i = 0,
 		len = contexts.length;
@@ -1870,12 +1888,17 @@ function setMatcher( preFilter, selector, matcher, postFilter, postFinder, postS
 		}
 	});
 }
-
+/*
+	用于匹配单个选择器组的函数，
+	是token和expr中定义方法的串联
+	Sizzle设计技巧是没有把拿到的分词与expr中方法直接逐个匹配
+	而是组合成一个嵌套的函数，最后一次性执行
+*/
 function matcherFromTokens( tokens ) {
 	var checkContext, matcher, j,
 		len = tokens.length,
 		leadingRelative = Expr.relative[ tokens[0].type ],
-		implicitRelative = leadingRelative || Expr.relative[" "],
+		implicitRelative = leadingRelative || Expr.relative[" "], // 选择器之间的亲密关系
 		i = leadingRelative ? 1 : 0,
 
 		// The foundational matcher ensures that elements are reachable from top-level context(s)
@@ -1894,11 +1917,15 @@ function matcherFromTokens( tokens ) {
 			checkContext = null;
 			return ret;
 		} ];
-
+	
 	for ( ; i < len; i++ ) {
+		// Expr.relative 匹配关系选择器类型
+		// "空 > ~ +"
 		if ( (matcher = Expr.relative[ tokens[i].type ]) ) {
+			// 当遇到关系选择器时elementMatcher函数将matchers数组中的函数生成一个函数
 			matchers = [ addCombinator(elementMatcher( matchers ), matcher) ];
 		} else {
+			// 过滤  ATTR CHILD CLASS ID PSEUDO TAG，返回相应标签处理对应的函数
 			matcher = Expr.filter[ tokens[i].type ].apply( null, tokens[i].matches );
 
 			// Return special upon seeing a positional matcher
@@ -1922,6 +1949,7 @@ function matcherFromTokens( tokens ) {
 					j < len && toSelector( tokens )
 				);
 			}
+			// 把匹配的函数压入matchers数组中
 			matchers.push( matcher );
 		}
 	}
@@ -1932,6 +1960,7 @@ function matcherFromTokens( tokens ) {
 function matcherFromGroupMatchers( elementMatchers, setMatchers ) {
 	var bySet = setMatchers.length > 0,
 		byElement = elementMatchers.length > 0,
+	    	// 终极匹配器
 		superMatcher = function( seed, context, xml, results, outermost ) {
 			var elem, j, matcher,
 				matchedCount = 0,
@@ -1952,6 +1981,7 @@ function matcherFromGroupMatchers( elementMatchers, setMatchers ) {
 			// Add elements passing elementMatchers directly to results
 			// Support: IE<9, Safari
 			// Tolerate NodeList properties (IE: "length"; Safari: <number>) matching elements by id
+			// 循环取出seed元素
 			for ( ; i !== len && (elem = elems[i]) != null; i++ ) {
 				if ( byElement && elem ) {
 					j = 0;
@@ -1959,6 +1989,7 @@ function matcherFromGroupMatchers( elementMatchers, setMatchers ) {
 						setDocument( elem );
 						xml = !documentIsHTML;
 					}
+					
 					while ( (matcher = elementMatchers[j++]) ) {
 						if ( matcher( elem, context || document, xml) ) {
 							results.push( elem );
@@ -2039,20 +2070,23 @@ function matcherFromGroupMatchers( elementMatchers, setMatchers ) {
 		markFunction( superMatcher ) :
 		superMatcher;
 }
-
+// 通过传进来的selector和match生成匹配器：“div > span.last + [type="text"]” “[array[6]]”
 compile = Sizzle.compile = function( selector, match /* Internal Use Only */ ) {
 	var i,
 		setMatchers = [],
 		elementMatchers = [],
 		cached = compilerCache[ selector + " " ];
-
+	// 有无cache
 	if ( !cached ) {
 		// Generate a function of recursive functions that can be used to check each element
+		// match集合为空，分次去
 		if ( !match ) {
 			match = tokenize( selector );
 		}
 		i = match.length;
+		// 从后生成匹配器
 		while ( i-- ) {
+			// matcherFromTokens生成token匹配器
 			cached = matcherFromTokens( match[i] );
 			if ( cached[ expando ] ) {
 				setMatchers.push( cached );
@@ -2062,6 +2096,7 @@ compile = Sizzle.compile = function( selector, match /* Internal Use Only */ ) {
 		}
 
 		// Cache the compiled function
+		// 这里可以看到，通过matcherFromGroupMatchers这个函数来生成最终的匹配器，最后直接执行cached[compile()()]
 		cached = compilerCache( selector, matcherFromGroupMatchers( elementMatchers, setMatchers ) );
 
 		// Save selector and tokenization
