@@ -1579,20 +1579,21 @@ tokenize = Sizzle.tokenize = function( selector, parseOnly ) {
 	var matched, match, tokens, type,
 		soFar, groups, preFilters,
 		cached = tokenCache[ selector + " " ];
-
+	// 如果有缓存直接返回
 	if ( cached ) {
 		return parseOnly ? 0 : cached.slice( 0 );
 	}
 
-	soFar = selector;
-	groups = [];
+	soFar = selector; // 存放还未处理的剩余选择器部分
+	groups = []; // 存放用逗号分隔的多个选择器数组eg.$('#xlshen, .xlshen input')
 	preFilters = Expr.preFilter;
 
 	while ( soFar ) {
 
-		// Comma and first run
+		// 如果有逗号分隔多个选择器，一步步进行分割
 		if ( !matched || (match = rcomma.exec( soFar )) ) {
 			if ( match ) {
+				//匹配到逗号处理
 				// Don't consume trailing commas as valid
 				soFar = soFar.slice( match[0].length ) || soFar;
 			}
@@ -1601,8 +1602,9 @@ tokenize = Sizzle.tokenize = function( selector, parseOnly ) {
 
 		matched = false;
 
-		// Combinators
+		// 根据正则表达式判断“> + ~ 空格”四种关系符号
 		if ( (match = rcombinators.exec( soFar )) ) {
+			// 获取匹配的关系选择符
 			matched = match.shift();
 			tokens.push({
 				value: matched,
@@ -1612,10 +1614,11 @@ tokenize = Sizzle.tokenize = function( selector, parseOnly ) {
 			soFar = soFar.slice( matched.length );
 		}
 
-		// Filters
+		// 从左往右依次处理当前选择器，对应当前选择器类型TAG, ID, CLASS, ATTR, CHILD, PSEUDO, NAME
 		for ( type in Expr.filter ) {
 			if ( (match = matchExpr[ type ].exec( soFar )) && (!preFilters[ type ] ||
 				(match = preFilters[ type ]( match ))) ) {
+				// 获取当前选择器
 				matched = match.shift();
 				tokens.push({
 					value: matched,
@@ -1625,7 +1628,7 @@ tokenize = Sizzle.tokenize = function( selector, parseOnly ) {
 				soFar = soFar.slice( matched.length );
 			}
 		}
-
+		// 处理完毕跳出循环
 		if ( !matched ) {
 			break;
 		}
@@ -1638,10 +1641,26 @@ tokenize = Sizzle.tokenize = function( selector, parseOnly ) {
 		soFar.length :
 		soFar ?
 			Sizzle.error( selector ) :
+			// 缓存
 			// Cache the tokens
 			tokenCache( selector, groups ).slice( 0 );
 };
-
+/*
+分析具体案例$('#xlshen:first-child, div > span.last + .xlshen[type="text"]'):
+分词结果：
+tokenize => ['#xlshen:first-child', 'div > span.last + .xlshen[type="text"]'] =>
+tokenize[0]:
+0: [value: "#xlshen", type: "ID", matches: Array[1]]
+1: [value: ":first-child", type: "CHILD", matches: Array[8]]
+tokenize[1]:
+0: [value: "div", type: "TAG", matches: Array[1]]
+1: [value: " > ", type: ">"]
+2: [value: "span", type: "TAG", matches: Array[1]]
+3: [value: ".last", type: "CLASS", matches: Array[1]]
+4: [value: ".last", type: "CLASS", matches: Array[1]]
+5: [value: ".last", type: "CLASS", matches: Array[1]]
+6: [value: "[type="text"]", type: "ATTR", matches: Array[3]]
+*/
 function toSelector( tokens ) {
 	var i = 0,
 		len = tokens.length,
