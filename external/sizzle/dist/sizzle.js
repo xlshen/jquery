@@ -1574,7 +1574,8 @@ for ( i in { submit: true, reset: true } ) {
 function setFilters() {}
 setFilters.prototype = Expr.filters = Expr.pseudos;
 Expr.setFilters = new setFilters();
-
+// 测试调用入口可以通过下面方式进入
+// $.find.select('#xlshen:first-child', document);
 tokenize = Sizzle.tokenize = function( selector, parseOnly ) {
 	var matched, match, tokens, type,
 		soFar, groups, preFilters,
@@ -2078,24 +2079,28 @@ compile = Sizzle.compile = function( selector, match /* Internal Use Only */ ) {
  * @param {Array} [results]
  * @param {Array} [seed] A set of elements to match against
  */
+// 分词之后进行逐步解析
 select = Sizzle.select = function( selector, context, results, seed ) {
 	var i, tokens, token, type, find,
 		compiled = typeof selector === "function" && selector,
 		match = !seed && tokenize( (selector = compiled.selector || selector) );
 
 	results = results || [];
-
+	
+	// 如果只是单个选择器的情况下可以特殊优化下eg.$('div > span.last + .xlshen[type="text"]')
 	// Try to minimize operations if there is only one selector in the list and no seed
 	// (the latter of which guarantees us context)
 	if ( match.length === 1 ) {
-
+		// 取出选择器的token序列
 		// Reduce context if the leading compound selector is an ID
 		tokens = match[0] = match[0].slice( 0 );
+		// 如果没有多组选择器，并且是id可以通过设置context快速查找
 		if ( tokens.length > 2 && (token = tokens[0]).type === "ID" &&
 				support.getById && context.nodeType === 9 && documentIsHTML &&
 				Expr.relative[ tokens[1].type ] ) {
 
 			context = ( Expr.find["ID"]( token.matches[0].replace(runescape, funescape), context ) || [] )[0];
+			// 如果context不存在就停止查找
 			if ( !context ) {
 				return results;
 
@@ -2103,20 +2108,31 @@ select = Sizzle.select = function( selector, context, results, seed ) {
 			} else if ( compiled ) {
 				context = context.parentNode;
 			}
-
+			// 去掉第一个id选择器
 			selector = selector.slice( tokens.shift().value.length );
 		}
 
 		// Fetch a seed set for right-to-left matching
 		i = matchExpr["needsContext"].test( selector ) ? 0 : tokens.length;
+		// 从后往前查找
 		while ( i-- ) {
 			token = tokens[i];
-
+			// 如果遇到关系选择器就停止“> + ~ 空”
 			// Abort if we hit a combinator
 			if ( Expr.relative[ (type = token.type) ] ) {
 				break;
 			}
+			// 看看有没有浏览器原生DOM接口
+			/* Expr.find = {
+			    'ID'    : context.getElementById,
+			    'CLASS' : context.getElementsByClassName,
+			    'TAG'   : context.getElementsByTagName
+			  }
+		  	*/
+			// 如果是:first-child这类伪类就没有对应的搜索器了，此时会向前提取前一条规则token
+			// 只有满足上面三个条件的：id，class，tag才能称为seed集合
 			if ( (find = Expr.find[ type ]) ) {
+				// 能否通过这个搜索器搜到符合条件的初始集合seed
 				// Search, expanding context for leading sibling combinators
 				if ( (seed = find(
 					token.matches[0].replace( runescape, funescape ),
@@ -2124,19 +2140,38 @@ select = Sizzle.select = function( selector, context, results, seed ) {
 				)) ) {
 
 					// If seed is empty or no tokens remain, we can return early
+					// 如果真的搜到了，把最后的一条规则删除
 					tokens.splice( i, 1 );
 					selector = seed.length && toSelector( tokens );
+					// 剩余选择器是否为空
 					if ( !selector ) {
+						// 提前返回
 						push.apply( results, seed );
 						return results;
 					}
-
+					// 已经找到seed
 					break;
 				}
 			}
 		}
 	}
-
+	// selector: div > span.last + [type="text"]
+	// 通过compile最终生成匹配器，通过匹配器过滤seed集合，那结果放到results中
+	// 生成编译函数
+        // var superMatcher = compile( selector, match )
+        //
+        // 执行
+        // superMatcher(seed,context,!documentIsHTML,results,rsibling.test( selector ))
+	// 此处是一个立即调用函数！
+	/*
+		整个过程总结一下：
+		1. 从右往左
+		2. 取出最后一个token：[type="text"]
+		3. 过滤类型，如果type是 > + ~ 空 四种关系选择器中的一种，则跳过，在继续过滤
+		4. 直到匹配到为ID,CLASS,TAG中一种 , 因为这样才能通过浏览器的接口索取
+		5. seed集获取到值， 修正选择器
+		6. 进入编译函数compile()
+	*/
 	// Compile and execute a filtering function if one is not provided
 	// Provide `match` to avoid retokenization if we modified the selector above
 	( compiled || compile( selector, match ) )(
