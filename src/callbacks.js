@@ -79,6 +79,7 @@ jQuery.Callbacks = function( options ) {
 				while ( ++firingIndex < list.length ) {
 
 					// Run callback and check for early termination
+					// 如果stopOnFalse为true,则剩余回调都不会执行，memory也失效
 					if ( list[ firingIndex ].apply( memory[ 0 ], memory[ 1 ] ) === false &&
 						options.stopOnFalse ) {
 
@@ -136,7 +137,7 @@ jQuery.Callbacks = function( options ) {
 							}
 						} );
 					} )( arguments );
-
+					// 如果memory为true,则立即执行add进来的回调函数
 					if ( memory && !firing ) {
 						fire();
 					}
@@ -148,6 +149,7 @@ jQuery.Callbacks = function( options ) {
 			remove: function() {
 				jQuery.each( arguments, function( _, arg ) {
 					var index;
+					// 查找函数位置
 					while ( ( index = jQuery.inArray( arg, list, index ) ) > -1 ) {
 						list.splice( index, 1 );
 
